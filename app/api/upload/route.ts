@@ -2,9 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { writeFile } from 'fs/promises'
-import { join } from 'path'
-import { v4 as uuidv4 } from 'uuid'
+import { put } from '@vercel/blob'
 
 export async function POST(request: Request) {
   try {
@@ -42,20 +40,16 @@ export async function POST(request: Request) {
       )
     }
 
-    const bytes = await file.arrayBuffer()
-    const buffer = Buffer.from(bytes)
-
-    const ext = file.name.split('.').pop() || 'jpg'
-    const filename = `${uuidv4()}.${ext}`
-    const uploadDir = join(process.cwd(), 'public', 'uploads')
-    const filepath = join(uploadDir, filename)
-
-    await writeFile(filepath, buffer)
+    // Upload to Vercel Blob
+    const blob = await put(`artwork/${session.user.id}/${Date.now()}-${file.name}`, file, {
+      access: 'public',
+      contentType: file.type
+    })
 
     const artwork = await prisma.artwork.create({
       data: {
         title,
-        imagePath: `/uploads/${filename}`,
+        imagePath: blob.url,
         userId: session.user.id
       }
     })

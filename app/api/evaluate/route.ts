@@ -3,8 +3,6 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { evaluateArtwork } from '@/lib/claude'
-import { readFile } from 'fs/promises'
-import { join } from 'path'
 
 export async function POST(request: Request) {
   try {
@@ -44,12 +42,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'This artwork has already been evaluated' }, { status: 400 })
     }
 
-    const imagePath = join(process.cwd(), 'public', artwork.imagePath)
-    const imageBuffer = await readFile(imagePath)
-    const imageBase64 = imageBuffer.toString('base64')
+    // Fetch image from URL (Vercel Blob or any URL)
+    const imageResponse = await fetch(artwork.imagePath)
+    if (!imageResponse.ok) {
+      return NextResponse.json({ error: 'Failed to fetch artwork image' }, { status: 500 })
+    }
 
-    const ext = artwork.imagePath.split('.').pop()?.toLowerCase()
-    const mediaType = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg'
+    const imageBuffer = await imageResponse.arrayBuffer()
+    const imageBase64 = Buffer.from(imageBuffer).toString('base64')
+
+    // Determine media type from URL or content-type header
+    const contentType = imageResponse.headers.get('content-type') || 'image/jpeg'
+    const mediaType = contentType.startsWith('image/') ? contentType : 'image/jpeg'
 
     const evaluation = await evaluateArtwork(imageBase64, mediaType)
 
